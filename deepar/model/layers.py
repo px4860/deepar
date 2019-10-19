@@ -3,8 +3,9 @@ from keras.initializers import glorot_normal
 from keras.layers import Layer
 
 
+# likelihood model
 class GaussianLayer(Layer):
-    def __init__(self, output_dim, **kwargs):
+    def __init__(self, output_dim=1, **kwargs):
         self.output_dim = output_dim
         self.kernel_1, self.kernel_2, self.bias_1, self.bias_2 = [], [], [], []
         super(GaussianLayer, self).__init__(**kwargs)
@@ -32,7 +33,7 @@ class GaussianLayer(Layer):
     def call(self, x):
         output_mu = K.dot(x, self.kernel_1) + self.bias_1
         output_sig = K.dot(x, self.kernel_2) + self.bias_2
-        output_sig_pos = K.log(1 + K.exp(output_sig)) + 1e-06
+        output_sig_pos = K.log(1 + K.exp(output_sig)) + 1e-06  # why add 1e-06
         return [output_mu, output_sig_pos]
 
     def compute_output_shape(self, input_shape):

@@ -1,11 +1,11 @@
 from deepar.model import NNModel
 from deepar.model.layers import GaussianLayer
-from keras.layers import Input, Dense, Input
+from keras.layers import Input, Dense, Input,TimeDistributed
 from keras.models import Model
 from keras.layers import LSTM
 from keras import backend as K
 import logging
-from deepar.model.loss import gaussian_likelihood
+from deepar.model.loss import gaussian_likelihood,gaussian_likelihood_2
 import numpy as np
 
 logger = logging.getLogger('deepar')
@@ -36,12 +36,30 @@ class DeepAR(NNModel):
         :return: inputs_shape (tuple), inputs (Tensor), [loc, scale] (a list of theta parameters
         of the target likelihood)
         """
-        input_shape = (20, 1)
+        # input_shape = (30, 1)
+        input_shape = (30, 3)
         inputs = Input(shape=input_shape)
-        x = LSTM(4, return_sequences=True)(inputs)
-        x = Dense(3, activation='relu')(x)
+        x, state_h, state_c = LSTM(4, return_sequences=True, return_state=True, name='LSTM')(inputs)
+        # x = TimeDistributed(Dense(3, activation='relu'))(x)
         loc, scale = GaussianLayer(1, name='main_output')(x)
         return input_shape, inputs, [loc, scale]
+
+    def init(self):
+        input_shape, inputs, theta = self.nn_structure()
+        model = Model(inputs, theta[0])
+        model.compile(loss=self.loss(theta[1]), optimizer=self.optimizer)
+        # if verbose:
+        #     logger.debug('Model was successfully trained')
+        self.keras_model = model
+        self.get_intermediate = K.function(inputs=[self.model.input],
+                                           outputs=self.model.get_layer(self._output_layer_name).output)
+
+    def more_fit(self):
+        input_shape, inputs, theta = self.nn_structure()
+        self.model.fit_generator(ts_generator(self.ts_obj,
+                                         input_shape[0]),
+                            steps_per_epoch=self.steps_per_epoch,
+                            epochs=self.epochs)
 
     def instantiate_and_fit(self, verbose=False):
         input_shape, inputs, theta = self.nn_structure()
@@ -83,5 +101,5 @@ def ts_generator(ts_obj, n_steps):
     :return:
     """
     while 1:
-        batch = ts_obj.next_batch(1, n_steps)
+        batch = ts_obj.next_batch(15, n_steps)
         yield batch[0], batch[1]

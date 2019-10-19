@@ -99,7 +99,7 @@ class TimeSeries(Dataset):
         return pd.concat([padding_df, pandas_df]).reset_index(drop=True)
 
     @staticmethod
-    def _sample_ts(pandas_df, desired_len):
+    def _sample_ts(pandas_df, desired_len, seeds=False):
         """
 
         :param pandas_df: input pandas df with 'target' columns e features
@@ -113,8 +113,11 @@ class TimeSeries(Dataset):
         if pandas_df.shape[0] == desired_len:
             return pandas_df
 
-        start_index = np.random.choice([i for i in range(0, pandas_df.shape[0] - desired_len + 1)])
-        return pandas_df.iloc[start_index: start_index+desired_len, ]
+        if seeds:
+            start_index = np.random.choice([i for i in range(270, 290)] + [i for i in range(400, 420)])
+        else:
+            start_index = np.random.choice([i for i in range(0, pandas_df.shape[0] - desired_len-1)])
+        return pandas_df.iloc[start_index: start_index+desired_len, ], pandas_df.iloc[start_index: start_index+desired_len, ]['order']
 
     def next_batch(self, batch_size, n_steps,
                    target_var='target', verbose=False,
@@ -128,39 +131,56 @@ class TimeSeries(Dataset):
         :return: X (feature space), y
         """
 
-        # Select n_batch time series
-        groups_list = self.data[self.grouping_variable].unique()
-        np.random.shuffle(groups_list)
-        selected_groups = groups_list[:batch_size]
-        input_data = self.data[self.data[self.grouping_variable].isin(set(selected_groups))]
-
-        # Initial padding for each selected time series to reach n_steps
         sampled = []
-        for cat, cat_data in input_data.groupby(self.grouping_variable):
-                if cat_data.shape[0] < n_steps:
-                    sampled_cat_data = self._pad_ts(pandas_df=cat_data,
-                                                    desired_len=n_steps,
-                                                    padding_val=padding_value)
-                else:
-                    sampled_cat_data = self._sample_ts(pandas_df=cat_data,
-                                                       desired_len=n_steps)
-                sampled.append(sampled_cat_data)
-                if verbose:
-                    logger.debug('Sampled data for {}'.format(cat))
-                    logger.debug(sampled_cat_data)
-        rnn_output = pd.concat(sampled).drop(columns=self.grouping_variable).reset_index(drop=True)
+        targeted = []
+        for i in range(batch_size):
+            a, b=self._sample_ts(pandas_df=self.data, desired_len=n_steps)
+            sampled.append(a)
+            targeted.append(b)
+        # for i in range(12):
+        #     a, b=self._sample_ts(pandas_df=self.data, desired_len=n_steps, seeds=True)
+        #     sampled.append(a)
+        #     targeted.append(b)
+        return pd.concat(sampled).reset_index(drop=True).values.reshape(batch_size, n_steps, 3), \
+               pd.concat(targeted).reset_index(drop=True).values.reshape(batch_size, n_steps, 1)
+        # Select n_batch time series
+        # groups_list = self.data[self.grouping_variable].unique()
+        # np.random.shuffle(groups_list)
+        # selected_groups = groups_list[:batch_size]
+        # input_data = self.data[self.data[self.grouping_variable].isin(set(selected_groups))]
+        #
+        # # Initial padding for each selected time series to reach n_steps
+        # sampled = []
+        # for cat, cat_data in input_data.groupby(self.grouping_variable):
+        #         if cat_data.shape[0] < n_steps:
+        #             sampled_cat_data = self.\
+        #                 _pad_ts(pandas_df=cat_data,
+        #                                             desired_len=n_steps,
+        #                                             padding_val=padding_value)
+        #         else:
+        #             sampled_cat_data = self._sample_ts(pandas_df=cat_data,
+        #                                                desired_len=n_steps+1)
+        #         sampled.append(sampled_cat_data)
+        #         if verbose:
+        #             logger.debug('Sampled data for {}'.format(cat))
+        #             logger.debug(sampled_cat_data)
+        # rnn_output = pd.concat(sampled).drop(columns=self.grouping_variable).reset_index(drop=True)
+        #
+        # if self.scaler:
+        #     batch_scaler = self.scaler()
+        #     n_rows = rnn_output.shape[0]
+        #     # Scaling will have to be extended to handle multiple variables!
+        #     rnn_output['feature_1'] = rnn_output.feature_1.astype('float')
+        #     rnn_output[target_var] = rnn_output[target_var].astype('float')
+        #
+        #     rnn_output['feature_1'] = batch_scaler.fit_transform(rnn_output.feature_1.values.reshape(n_rows, 1)).reshape(n_rows)
+        #     rnn_output[target_var] = batch_scaler.fit_transform(rnn_output[target_var].values.reshape(n_rows, 1)).reshape(n_rows)
+        #
+        # return rnn_output[:-1].as_matrix().reshape(batch_size, n_steps, -1), \
+        #        rnn_output[1:].as_matrix().reshape(batch_size, n_steps, 1)
 
-        if self.scaler:
-            batch_scaler = self.scaler()
-            n_rows = rnn_output.shape[0]
-            # Scaling will have to be extended to handle multiple variables!
-            rnn_output['feature_1'] = rnn_output.feature_1.astype('float')
-            rnn_output[target_var] = rnn_output[target_var].astype('float')
-
-            rnn_output['feature_1'] = batch_scaler.fit_transform(rnn_output.feature_1.values.reshape(n_rows, 1)).reshape(n_rows)
-            rnn_output[target_var] = batch_scaler.fit_transform(rnn_output[target_var].values.reshape(n_rows, 1)).reshape(n_rows)
-
-        return rnn_output.drop(target_var, 1).as_matrix().reshape(batch_size, n_steps, -1), \
-               rnn_output[target_var].as_matrix().reshape(batch_size, n_steps, 1)
-
+    # def next_batch(self, batch_size, n_steps):
+    #     _sample = self._sample_ts(self.data, 15)
+    #     return pd.DataFrame(_sample['target']).reshape(batch_size, n_steps, -1), \
+    #            pd.DataFrame(_sample['target']).reshape(batch_size, n_steps, 1)
 
