@@ -14,12 +14,13 @@ import os
 
 data = pd.read_csv(os.getcwd()+'\data\%s' % 'B007SIR08C-A23TNQB4GVF91M-ATVPDKIKX0DER-1.csv', header=None, names=['date','order','seller','marketplace'])
 data['count'] = data['date'].apply(lambda x: int(x.split('-')[0])*10000+int(x.split('-')[1])*100+int(x.split('-')[2]))
-data[['count']].apply(lambda x : (x-np.min(x))/(np.max(x)-np.min(x)))
+data['promotion'] = 0
+data.loc[data['order'] > 150, 'promotion'] = 1
+data[['count']] = data[['count']].apply(lambda x : (x-np.min(x))/(np.max(x)-np.min(x)))
+# data[['order','count']] = data[['order','count']].apply(lambda x : (x-np.min(x))/(np.max(x)-np.min(x)))
 data['date'] = pd.to_datetime(data['date'])
 data.set_index('date', inplace=True)
 data.drop(columns=['seller','marketplace'], inplace=True)
-data['promotion'] = 0
-data.loc[data['order'] > 150, 'promotion'] = 1
 
 ts = TimeSeries(data.head(500))
 
